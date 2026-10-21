@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Realm of Nash — a WoW-style 3D map of Nashville, TN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #d9c48f; }
+  #map { position: absolute; inset: 0; }
+
+  /* aged-paper vignette + grain over the map (pure CSS, non-interactive) */
+  #parchment {
+    position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    background:
+      radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(74,52,20,0.28) 100%),
+      radial-gradient(ellipse at 20% 10%, rgba(255,246,220,0.18), rgba(0,0,0,0) 60%),
+      radial-gradient(ellipse at 85% 90%, rgba(120,84,30,0.14), rgba(0,0,0,0) 55%);
+  }
+  #grain {
+    position: absolute; inset: 0; pointer-events: none; z-index: 6; opacity: .5; mix-blend-mode: multiply;
+  }
+
+  /* title cartouche */
+  #title {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    z-index: 10; text-align: center; pointer-events: none;
+    background: linear-gradient(180deg, #f4e7c3, #e4cf9c);
+    border: 2px solid #6b4e26; border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(60,40,10,.35), inset 0 0 18px rgba(120,84,30,.25);
+    padding: 10px 34px 12px;
+  }
+  #title h1 {
+    font-family: 'Cinzel', serif; font-size: 26px; letter-spacing: 4px;
+    color: #4a3016; margin: 0; text-shadow: 0 1px 0 #f8efce;
+  }
+  #title p {
+    font-family: 'IM Fell English', serif; font-style: italic; font-size: 14px;
+    color: #6b4e26; margin: 4px 0 0;
+  }
+
+  /* legend */
+  #legend {
+    position: absolute; left: 18px; bottom: 34px; z-index: 10;
+    background: rgba(244,231,195,.94); border: 2px solid #6b4e26; border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(60,40,10,.35);
+    padding: 12px 16px; font-family: 'IM Fell English', serif; color: #4a3016;
+    max-width: 240px;
+  }
+  #legend h3 { font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 2px; margin: 0 0 8px; }
+  #legend .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 14px; }
+  #legend .sw { width: 26px; height: 12px; border: 1px solid #6b4e26; border-radius: 2px; flex: none; }
+  #legend .ln { width: 26px; height: 0; border-top: 3px solid #6b4e26; flex: none; }
+  #legend small { display: block; margin-top: 8px; font-style: italic; color: #6b4e26; }
+
+  /* controls */
+  #controls {
+    position: absolute; right: 18px; top: 18px; z-index: 10; display: flex; flex-direction: column; gap: 8px;
+  }
+  .btn {
+    font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 1px;
+    background: #f4e7c3; color: #4a3016; border: 2px solid #6b4e26; border-radius: 4px;
+    padding: 8px 12px; cursor: pointer; box-shadow: 0 2px 6px rgba(60,40,10,.3);
+  }
+  .btn:hover { background: #efdcab; }
+  .btn.active { background: #d9b96a; }
+
+  /* how-to panel */
+  #howto {
+    position: absolute; right: 18px; top: 120px; z-index: 10; width: 280px;
+    background: rgba(244,231,195,.96); border: 2px solid #6b4e26; border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(60,40,10,.35);
+    padding: 14px 16px; font-family: 'IM Fell English', serif; color: #4a3016; font-size: 14px;
+    display: none;
+  }
+  #howto h3 { font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 2px; margin: 0 0 8px; }
+  #howto ol { margin: 0; padding-left: 18px; }
+  #howto li { margin: 6px 0; }
+  #howto code { background: #e4cf9c; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  /* compass rose */
+  #compass { position: absolute; right: 22px; bottom: 30px; z-index: 10; width: 86px; height: 86px; opacity: .9; }
+
+  .maplibre-ctrl-attrib { font-size: 10px; }
+  .maplibre-ctrl-attrib a { color: #6b4e26; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="parchment"></div>
+<svg id="grain" xmlns="http://www.w3.org/2000/svg">
+  <filter id="paperNoise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.30  0 0 0 0 0.14  0 0 0 0.05 0"/></filter>
+  <rect width="100%" height="100%" filter="url(#paperNoise)"/>
+</svg>
+
+<div id="title">
+  <h1>THE REALM OF NASH</h1>
+  <p>a cartographer's survey of the greater Nashville wilds — now in three dimensions</p>
+</div>
+
+<div id="legend">
+  <h3>LEGEND</h3>
+  <div class="row"><span class="sw" style="background:#a39a63"></span> the deep woods</div>
+  <div class="row"><span class="sw" style="background:#8fb8a8"></span> waters &amp; the serpent river</div>
+  <div class="row"><span class="sw" style="background:#b08d57"></span> strongholds</div>
+  <div class="row"><span class="ln"></span> the old roads</div>
+  <div class="row"><span class="ln" style="border-top:3px dashed #6b4e26"></span> footpaths &amp; trails</div>
+  <small>zone names are the cartographer's fancy — toggle them off for the honest map.</small>
+</div>
+
+<div id="controls">
+  <button class="btn active" id="zonesBtn">Zone names: ON</button>
+  <button class="btn active" id="tiltBtn">3D tilt: ON</button>
+  <button class="btn" id="howtoBtn">How to iterate</button>
+  <button class="btn" id="exportBtn">Export style.json</button>
+</div>
+
+<div id="howto">
+  <h3>MAKE IT YOURS</h3>
+  <ol>
+    <li>Right-drag (or two-finger drag) to spin the camera, scroll to zoom, and use <b>3D tilt</b> to drop back to a flat map.</li>
+    <li>Click <b>Export style.json</b> to download this map's style.</li>
+    <li>Open <b>Maputnik</b> (maputnik.github.io/editor), choose <i>Open</i> → upload the file.</li>
+    <li>Restyle anything — colors, label fonts, road widths — and export again.</li>
+    <li>For a true fantasy typeface, self-host glyphs (the Noto fonts here are the only ones the free tile server ships).</li>
+    <li>POIs come live from the tiles via <b>Overpass API</b> — query real places and re-skin them as inns, quest hubs, dungeons.</li>
+  </ol>
+</div>
+
+<svg id="compass" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="46" fill="#f4e7c3" stroke="#6b4e26" stroke-width="3"/>
+  <polygon points="50,8 56,50 50,92 44,50" fill="#6b4e26"/>
+  <polygon points="8,50 50,44 92,50 50,56" fill="#a3803f"/>
+  <text x="50" y="30" text-anchor="middle" font-family="Cinzel, serif" font-size="16" fill="#4a3016">N</text>
+</svg>
+
+<script>
+/* ------------------------------------------------------------------
+   The Realm of Nash — WoW-style fantasy map of Nashville, TN
+   Stack: MapLibre GL JS + OpenFreeMap vector tiles (free, no key).
+   Tiles: https://tiles.openfreemap.org/planet (OpenMapTiles schema)
+   ------------------------------------------------------------------ */
+
+const PARCHMENT = '#e6d3a3';
+const INK       = '#4a3016';
+const INK_SOFT  = '#6b4e26';
+
+const fantasyStyle = {
+  version: 8,
+  name: 'realm-of-nash',
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sources: {
+    openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+    fantasy: {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: [
+          { type:'Feature', properties:{ name:'THE CITADEL' },      geometry:{ type:'Point', coordinates:[-86.7816, 36.1627] } },
+          { type:'Feature', properties:{ name:'THE GULCH DEEP' },   geometry:{ type:'Point', coordinates:[-86.7866, 36.1566] } },
+          { type:'Feature', properties:{ name:"BARD'S ROW" },       geometry:{ type:'Point', coordinates:[-86.7966, 36.1494] } },
+          { type:'Feature', properties:{ name:'STONE WARD' },       geometry:{ type:'Point', coordinates:[-86.7772, 36.1755] } },
+          { type:'Feature', properties:{ name:'EASTMARCH' },        geometry:{ type:'Point', coordinates:[-86.7494, 36.1855] } },
+          { type:'Feature', properties:{ name:'GREENHILLS' },       geometry:{ type:'Point', coordinates:[-86.8144, 36.1033] } },
+          { type:'Feature', properties:{ name:'THE GRAND HALL' },   geometry:{ type:'Point', coordinates:[-86.6936, 36.2116] } },
+          { type:'Feature', properties:{ name:'GRIFFON LANDING' },  geometry:{ type:'Point', coordinates:[-86.6772, 36.1238] } },
+          { type:'Feature', properties:{ name:'THE GREAT GREEN' },  geometry:{ type:'Point', coordinates:[-86.8133, 36.1461] } },
+          { type:'Feature', properties:{ name:'WOLFSWOOD' },        geometry:{ type:'Point', coordinates:[-86.7227, 36.1794] } }
+        ]
+      }
+    }
+  },
+  layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': PARCHMENT } },
+
+    /* --- water --- */
+    { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water',
+      paint: { 'fill-color': '#8fb8a8', 'fill-outline-color': '#6b9a8e' } },
+    { id: 'waterway', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway',
+      paint: { 'line-color': '#6b9a8e',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1, 12, 2.5, 16, 6] } },
+
+    /* --- land: woods, grass, fields --- */
+    { id: 'landcover_wood', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'wood'],
+      paint: { 'fill-color': '#a39a63', 'fill-opacity': 0.85 } },
+    { id: 'landcover_grass', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'grass'],
+      paint: { 'fill-color': '#c9b67e', 'fill-opacity': 0.7 } },
+    { id: 'landcover_farmland', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'farmland'],
+      paint: { 'fill-color': '#d3bd7f', 'fill-opacity': 0.6 } },
+    { id: 'landcover_sand', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'sand'],
+      paint: { 'fill-color': '#dcc48f' } },
+    { id: 'landcover_scrub', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+      filter: ['==', ['get', 'class'], 'scrub'],
+      paint: { 'fill-color': '#b3a86e', 'fill-opacity': 0.7 } },
+    { id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park',
+      paint: { 'fill-color': '#a8a06a', 'fill-opacity': 0.75,
+               'fill-outline-color': 'rgba(107,78,38,0.5)' } },
+    { id: 'landuse_residential', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+      filter: ['==', ['get', 'class'], 'residential'],
+      paint: { 'fill-color': '#dcc88f', 'fill-opacity': 0.55 } },
+    { id: 'landuse_commercial', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+      filter: ['in', ['get', 'class'], ['literal', ['commercial', 'retail']]],
+      paint: { 'fill-color': '#d4b878', 'fill-opacity': 0.6 } },
+    { id: 'landuse_industrial', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+      filter: ['==', ['get', 'class'], 'industrial'],
+      paint: { 'fill-color': '#c4a468', 'fill-opacity': 0.55 } },
+    { id: 'landuse_cemetery', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+      filter: ['==', ['get', 'class'], 'cemetery'],
+      paint: { 'fill-color': '#9c9a63', 'fill-opacity': 0.6 } },
+    { id: 'aeroway', type: 'fill', source: 'openmaptiles', 'source-layer': 'aeroway',
+      filter: ['==', ['get', 'class'], 'runway'],
+      paint: { 'fill-color': '#cbb37e' } },
+
+    /* --- buildings --- */
+    { id: 'building', type: 'fill', source: 'openmaptiles', 'source-layer': 'building',
+      minzoom: 13,
+      paint: { 'fill-color': '#b08d57', 'fill-opacity': 0.8,
+               'fill-outline-color': '#6b4e26' } },
+
+    /* --- buildings, extruded: the third dimension --- */
+    { id: 'building-3d', type: 'fill-extrusion', source: 'openmaptiles', 'source-layer': 'building',
+      minzoom: 14,
+      filter: ['!=', ['get', 'hide_3d'], true],
+      paint: { 'fill-extrusion-color': '#b08d57',
+               'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'],
+                 14, 0,
+                 15, ['coalesce', ['get', 'render_height'], 12]],
+               'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+               'fill-extrusion-opacity': 0.92 } },
+
+    /* --- boundaries: faint realm borders --- */
+    { id: 'boundary', type: 'line', source: 'openmaptiles', 'source-layer': 'boundary',
+      filter: ['<=', ['get', 'admin_level'], 8],
+      paint: { 'line-color': '#7a5c33', 'line-width': 1.5,
+               'line-dasharray': [6, 4], 'line-opacity': 0.55 } },
+
+    /* --- roads, the old roads --- */
+    { id: 'road_motorway_casing', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+      filter: ['all', ['==', ['get', 'class'], 'motorway'], ['!=', ['get', 'brunnel'], 'tunnel']],
+      paint: { 'line-color': '#5e4526',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 6, 16, 14] } },
+    { id: 'road_motorway', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+      filter: ['all', ['==', ['get', 'class'], 'motorway'], ['!=', ['get', 'brunnel'], 'tunnel']],
+      paint: { 'line-color': '#c49a5a',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 12, 4, 16, 11] } },
+    { id: 'road_major', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+      filter: ['all', ['in', ['get', 'class'], ['literal', ['trunk', 'primary']]], ['!=', ['get', 'brunnel'], 'tunnel']],
+      paint: { 'line-color': '#96763f',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1, 12, 3, 16, 8] } },
+    { id: 'road_minor', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+      filter: ['all', ['in', ['get', 'class'], ['literal', ['secondary', 'tertiary', 'minor']]], ['!=', ['get', 'brunnel'], 'tunnel']],
+      paint: { 'line-color': '#a3803f',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.8, 14, 2.5, 16, 5] } },
+    { id: 'road_path', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+      filter: ['in', ['get', 'class'], ['literal', ['track', 'path', 'pedestrian', 'footway', 'cycleway']]],
+      paint: { 'line-color': '#7a5c33', 'line-width': 1.2, 'line-dasharray': [3, 2.5], 'line-opacity': 0.8 } },
+    { id: 'road_rail', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+      filter: ['==', ['get', 'class'], 'rail'],
+      paint: { 'line-color': '#5e4526', 'line-width': 1.6, 'line-dasharray': [5, 2] } },
+
+    /* --- labels --- */
+    { id: 'water_name', type: 'symbol', source: 'openmaptiles', 'source-layer': 'water_name',
+      layout: { 'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Italic'],
+                'text-size': ['interpolate', ['linear'], ['zoom'], 8, 11, 14, 15],
+                'text-letter-spacing': 0.25 },
+      paint: { 'text-color': '#3d6b66', 'text-halo-color': PARCHMENT, 'text-halo-width': 1.5 } },
+    { id: 'road_name', type: 'symbol', source: 'openmaptiles', 'source-layer': 'transportation_name',
+      minzoom: 11,
+      layout: { 'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Regular'],
+                'text-size': 10, 'symbol-placement': 'line' },
+      paint: { 'text-color': '#5e4526', 'text-halo-color': PARCHMENT, 'text-halo-width': 1 } },
+    { id: 'place_city', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place',
+      filter: ['in', ['get', 'class'], ['literal', ['city', 'town']]],
+      layout: { 'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Bold'],
+                'text-size': ['interpolate', ['linear'], ['zoom'], 8, 13, 12, 20],
+                'text-transform': 'uppercase', 'text-letter-spacing': 0.3 },
+      paint: { 'text-color': INK, 'text-halo-color': PARCHMENT, 'text-halo-width': 2 } },
+    { id: 'place_suburb', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place',
+      filter: ['in', ['get', 'class'], ['literal', ['suburb', 'village', 'neighbourhood']]],
+      minzoom: 10,
+      layout: { 'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Regular'],
+                'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 13],
+                'text-letter-spacing': 0.12 },
+      paint: { 'text-color': INK_SOFT, 'text-halo-color': PARCHMENT, 'text-halo-width': 1.5 } },
+    { id: 'poi_label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi',
+      filter: ['all', ['>=', ['get', 'rank'], 1], ['<=', ['get', 'rank'], 5]],
+      minzoom: 13,
+      layout: { 'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Italic'],
+                'text-size': 10 },
+      paint: { 'text-color': '#5e4526', 'text-halo-color': PARCHMENT, 'text-halo-width': 1.5 } },
+
+    /* --- the cartographer's fancy: fantasy zone names --- */
+    { id: 'fantasy_zones', type: 'symbol', source: 'fantasy',
+      layout: { 'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Bold'],
+                'text-size': ['interpolate', ['linear'], ['zoom'], 9, 12, 13, 17],
+                'text-transform': 'uppercase', 'text-letter-spacing': 0.35,
+                'text-allow-overlap': true },
+      paint: { 'text-color': '#3d2b16', 'text-halo-color': '#f4e7c3', 'text-halo-width': 2.5 } }
+  ]
+};
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: fantasyStyle,
+  center: [-86.7816, 36.1627],   // downtown Nashville
+  zoom: 14.5,
+  pitch: 60,
+  bearing: -25,
+  maxPitch: 85,
+  attributionControl: { compact: true }
+});
+
+map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
+
+/* 3D tilt toggle */
+const tiltBtn = document.getElementById('tiltBtn');
+tiltBtn.addEventListener('click', () => {
+  const tilted = map.getPitch() > 0;
+  map.easeTo({ pitch: tilted ? 0 : 60, duration: 900 });
+  tiltBtn.textContent = '3D tilt: ' + (tilted ? 'OFF' : 'ON');
+  tiltBtn.classList.toggle('active', !tilted);
+});
+
+/* zone-name toggle */
+const zonesBtn = document.getElementById('zonesBtn');
+zonesBtn.addEventListener('click', () => {
+  const on = map.getLayoutProperty('fantasy_zones', 'visibility') !== 'none';
+  map.setLayoutProperty('fantasy_zones', 'visibility', on ? 'none' : 'visible');
+  zonesBtn.textContent = 'Zone names: ' + (on ? 'OFF' : 'ON');
+  zonesBtn.classList.toggle('active', !on);
+});
+
+/* how-to panel */
+const howto = document.getElementById('howto');
+document.getElementById('howtoBtn').addEventListener('click', () => {
+  howto.style.display = howto.style.display === 'block' ? 'none' : 'block';
+});
+
+/* export the style JSON for Maputnik */
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(fantasyStyle, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'realm-of-nash-style.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Realm of Nash — a WoW-style 3D map of Nashville, TN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="map"></div>
+<div id="grade"></div>
+<canvas id="fx"></canvas>
+<canvas id="fog"></canvas>
+<div id="parchment"></div>
+<svg id="grain" xmlns="http://www.w3.org/2000/svg">
+  <filter id="paperNoise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.30  0 0 0 0 0.14  0 0 0 0.05 0"/></filter>
+  <rect width="100%" height="100%" filter="url(#paperNoise)"/>
+</svg>
+<canvas id="marks"></canvas>
+
+<div id="title">
+  <h1>THE REALM OF NASH</h1>
+  <p>a cartographer's survey of the greater Nashville wilds — now in three dimensions</p>
+</div>
+
+<div id="minimap">
+  <h3>THE KNOWN REALM</h3>
+  <canvas id="mini" width="176" height="118"></canvas>
+</div>
+
+<div id="legend">
+  <h3>LEGEND</h3>
+  <div class="row"><span class="sw" style="background:#a39a63"></span> the deep woods</div>
+  <div class="row"><span class="sw" style="background:#8fb8a8"></span> waters &amp; the serpent river</div>
+  <div class="row"><span class="sw" style="background:#b08d57"></span> strongholds</div>
+  <div class="row"><span class="ln"></span> the old roads</div>
+  <div class="row"><span class="ln" style="border-top:3px dashed #6b4e26"></span> footpaths &amp; trails</div>
+  <small>zone names are the cartographer's fancy — toggle them off for the honest map.</small>
+</div>
+
+<div id="controls">
+  <button class="btn active" id="zonesBtn">Zone names: ON</button>
+  <button class="btn active" id="tiltBtn">3D tilt: ON</button>
+  <button class="btn" id="flyBtn" type="button">Take flight</button>
+  <button class="btn" id="questBtn" type="button">Quest log</button>
+  <button class="btn active" id="mistBtn" type="button">Mists: ON</button>
+  <button class="btn" id="howtoBtn">How to iterate</button>
+  <button class="btn" id="exportBtn">Export style.json</button>
+</div>
+
+<div id="howto">
+  <h3>MAKE IT YOURS</h3>
+  <ol>
+    <li>Right-drag (or two-finger drag) to spin the camera, scroll to zoom, and use <b>3D tilt</b> to drop back to a flat map.</li>
+    <li>Drag the hourglass along the bottom to roll day into night. <b>[</b> and <b>]</b> nudge the hour. <b>P</b> stills it.</li>
+    <li>Click a golden mark for the cartographer's lore, then <b>Journey here</b>. <b>L</b> opens the quest log. Keys <b>1–6</b> fly the chain.</li>
+    <li><b>F</b> takes flight: WASD to soar, mouse to look, Shift to go swift. <b>F</b> again to land. The mists pull back as you go. <b>M</b> lifts them.</li>
+    <li>The small map is the known realm. Click it to journey. Explored ground is remembered on this machine.</li>
+    <li>Click <b>Export style.json</b> to download this map's style.</li>
+    <li>Open <b>Maputnik</b> (maputnik.github.io/editor), choose <i>Open</i> → upload the file.</li>
+    <li>Restyle anything — colors, label fonts, road widths — and export again.</li>
+    <li>For a true fantasy typeface, self-host glyphs (the Noto fonts here are the only ones the free tile server ships).</li>
+    <li>POIs come live from the tiles via <b>Overpass API</b> — query real places and re-skin them as inns, quest hubs, dungeons.</li>
+  </ol>
+</div>
+
+<div id="hourglass">
+  <span id="luminary"></span>
+  <div>
+    <div id="hourLabel">Afternoon · Fair skies</div>
+    <input id="hour" type="range" min="0" max="24" step="0.01" value="15.2" aria-label="Hour of the realm">
+  </div>
+  <button class="btn active" id="hourPause" type="button">Hourglass: running</button>
+</div>
+
+<div id="flyBanner">WASD to soar · mouse to look · Shift is swift · F to land</div>
+<div id="toast"></div>
+
+<aside id="questlog">
+  <h3>QUEST LOG</h3>
+  <p id="questHint"></p>
+  <ol id="questList"></ol>
+  <button class="btn" id="questReset" type="button">Begin the survey anew</button>
+</aside>
+
+<aside id="lore">
+  <h3 id="loreTitle">THE CITADEL</h3>
+  <p id="loreEpithet" class="epithet">heart of the realm</p>
+  <p id="loreBody"></p>
+  <div class="lore-actions">
+    <button class="btn" id="loreFly" type="button">Journey here</button>
+    <button class="btn" id="loreClose" type="button">Close the tome</button>
+  </div>
+</aside>
+
+<svg id="compass" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="46" fill="#f4e7c3" stroke="#6b4e26" stroke-width="3"/>
+  <polygon points="50,8 56,50 50,92 44,50" fill="#6b4e26"/>
+  <polygon points="8,50 50,44 92,50 50,56" fill="#a3803f"/>
+  <text x="50" y="30" text-anchor="middle" font-family="Cinzel, serif" font-size="16" fill="#4a3016">N</text>
+</svg>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
