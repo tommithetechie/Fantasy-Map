@@ -1,15 +1,15 @@
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
-import { startAtmosphere } from "./atmosphere";
-import { startFog } from "./fog";
-import { startFly } from "./fly";
-import { startFx } from "./fx";
-import { startLore } from "./lore";
-import { startLoop } from "./loop";
 import { fantasyStyle } from "./map-style";
-import { startQuests } from "./quests";
-import { startWeather } from "./weather";
+import { initControls } from "./systems/controls";
+import { initFog } from "./systems/fogOfWar";
+import { initMinimap } from "./systems/minimap";
+import { initOverlays } from "./systems/overlays";
+import { initPerf, setVisibleHook } from "./systems/perf";
+import { initProgress } from "./systems/progress";
+import { catchUp, initTime } from "./systems/timeOfDay";
+import { initWeather, refreshWeatherIfStale } from "./systems/weather";
 
 const map = new maplibregl.Map({
   container: "map",
@@ -22,7 +22,7 @@ const map = new maplibregl.Map({
   attributionControl: { compact: true },
 });
 
-map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), "bottom-right");
+map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), "bottom-left");
 
 const compass = document.getElementById("compass");
 function syncCompass(): void {
@@ -66,14 +66,18 @@ requireButton("howtoBtn").addEventListener("click", () => {
 });
 
 map.on("load", () => {
-  startAtmosphere(map);
-  startLore(map);
-  startQuests(map);
-  startFx(map);
-  startFly(map);
-  startWeather();
-  startFog(map);
-  startLoop();
+  initPerf(map);
+  initTime(map);
+  initProgress();
+  initWeather(map);
+  initOverlays(map);
+  initFog(map);
+  initControls(map);
+  initMinimap(map);
+  setVisibleHook(() => {
+    catchUp();
+    refreshWeatherIfStale();
+  });
 });
 
 map.on("moveend", () => {
